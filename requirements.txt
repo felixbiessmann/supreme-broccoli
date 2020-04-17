@@ -1,0 +1,8 @@
+GetOldTweets3==0.0.11
+jupyter
+pandas
+sklearn
+beautifulsoup4==4.9.0
+voila
+stop-words
+facebook-scraper
