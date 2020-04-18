@@ -7,3 +7,4 @@ voila
 stop-words
 requests
 matplotlib
+ipython
