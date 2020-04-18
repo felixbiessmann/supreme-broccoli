@@ -5,4 +5,5 @@ sklearn
 beautifulsoup4==4.9.0
 voila
 stop-words
-facebook-scraper
+requests
+matplotlib
