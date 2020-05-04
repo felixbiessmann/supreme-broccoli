@@ -52,9 +52,9 @@ def train_single(data, labels, save_str=""):
 
     '''
     text_clf = Pipeline([('vect', TfidfVectorizer()),
-                        ('clf',SGDClassifier(loss="log",max_iter=2000))])
-    parameters = {'vect__ngram_range': [(1,2)],
-           'clf__alpha': (10.**np.arange(-7,-2)).tolist()}
+                        ('clf',SGDClassifier(loss="log"))])
+    parameters = {'vect__ngram_range': [(1,1)],
+           'clf__alpha': (10.**np.arange(-6,-3)).tolist()}
     # perform gridsearch to get the best regularizer
     gs_clf = GridSearchCV(text_clf, parameters, cv=2, n_jobs=-1,verbose=6)
     gs_clf.fit(data,labels)
