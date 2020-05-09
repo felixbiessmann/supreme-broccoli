@@ -1,4 +1,4 @@
-import re, string
+import re, string, os
 import pandas as pd
 from bs4 import BeautifulSoup
 import requests
@@ -62,8 +62,8 @@ def get_tweets_for_keywords(batchsize=20, max_keywords=40):
     df = pd.read_csv('keywords.csv') 
     for manifestolabel in df.columns:
         path = os.path.join(SAVEDIR, manifestolabel)
-        os.makedirs(path)
-        for kw_chunk in chunked_iterable(df[kw].dropna()[:max_keywords], batchsize): 
+        os.makedirs(path, exist_ok=True)
+        for kw_chunk in chunked_iterable(df[manifestolabel].dropna()[:max_keywords], batchsize): 
             get_tweets(keywords=kw_chunk, 
                        start=START_BEFORE,
                        stop=STOP_BEFORE, 
