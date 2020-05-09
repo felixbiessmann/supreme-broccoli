@@ -35,8 +35,8 @@ def get_text_from_url(url):
 
 def get_tweets(keywords, start='2020-04-10', stop='2020-04-11',save_dir=''):
     datestr = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    savestr = f'{keywords[0]}-{keywords[-1]}-{datestr}.csv'
-    print(f'{datestr}: Fetching tweets for keywords: {keywords}')
+    savestr = os.path.join(save_dir,f'{keywords[0]}-{keywords[-1]}-{datestr}.csv')
+    print(f'{datestr}: Fetching tweets in range {start} - {stop} for keywords: {keywords}')
 
     tweetCriteria = got.manager.TweetCriteria().setQuerySearch(" OR ".join(keywords))\
                                          .setSince(start)\
@@ -54,8 +54,9 @@ def get_tweets(keywords, start='2020-04-10', stop='2020-04-11',save_dir=''):
         tweet_dicts.append(tweet_dict)
 
     enddatestr =  datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    print(f'{enddatestr}: Found {len(tweets)} tweets for keywords: {keywords}')
-    pd.DataFrame(tweet_dicts).set_index('date').to_csv(savestr, index=False)
+    print(f'{enddatestr}: Found {len(tweets)} tweets')
+    if len(tweets)>0:
+        pd.DataFrame(tweet_dicts).set_index('date').to_csv(savestr, index=False)
     
 
 def get_tweets_for_keywords(batchsize=20, max_keywords=40):
