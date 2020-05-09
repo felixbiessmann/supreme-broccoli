@@ -59,9 +59,9 @@ def get_tweets(keywords, start='2020-04-10', stop='2020-04-11',save_dir=''):
     
 
 def get_tweets_for_keywords(batchsize=20, max_keywords=40):
-	df = pd.read_csv('keywords.csv') 
-	for manifestolabel in df.columns:
-		path = os.path.join(SAVEDIR, manifestolabel)
+    df = pd.read_csv('keywords.csv') 
+    for manifestolabel in df.columns:
+        path = os.path.join(SAVEDIR, manifestolabel)
         os.makedirs(path)
         for kw_chunk in chunked_iterable(df[kw].dropna()[:max_keywords], batchsize): 
             get_tweets(keywords=kw_chunk, 
@@ -72,4 +72,4 @@ def get_tweets_for_keywords(batchsize=20, max_keywords=40):
                        start=START_AFTER,
                        stop=STOP_AFTER, 
                        save_dir=path)
-		
+
