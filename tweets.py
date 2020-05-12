@@ -10,10 +10,10 @@ import itertools
 
 SAVEDIR = 'twitterdata'
 
-START_BEFORE='2020-02-01'
-STOP_BEFORE='2020-02-14'
-START_AFTER='2020-04-01'
-STOP_AFTER='2020-04-14'
+START_BEFORE='2020-01-15'
+STOP_BEFORE='2020-01-31'
+START_AFTER='2020-04-15'
+STOP_AFTER='2020-04-30'
 
 def chunked_iterable(iterable, size):
     it = iter(iterable)
@@ -35,7 +35,7 @@ def get_text_from_url(url):
 
 def get_tweets(keywords, start='2020-04-10', stop='2020-04-11',save_dir=''):
     datestr = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    savestr = os.path.join(save_dir,f'{keywords[0]}-{keywords[-1]}-{datestr}.csv')
+    savestr = os.path.join(save_dir,f'{keywords[0]}-{keywords[-1]}-{datestr}.json')
     print(f'{datestr}: Fetching tweets in range {start} - {stop} for keywords: {keywords}')
 
     tweetCriteria = got.manager.TweetCriteria().setQuerySearch(" OR ".join(keywords))\
@@ -56,7 +56,7 @@ def get_tweets(keywords, start='2020-04-10', stop='2020-04-11',save_dir=''):
     enddatestr =  datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
     print(f'{enddatestr}: Found {len(tweets)} tweets')
     if len(tweets)>0:
-        pd.DataFrame(tweet_dicts).set_index('date').to_csv(savestr, index=False)
+        pd.DataFrame(tweet_dicts).set_index('date').to_json(savestr, orient='records', lines=True)
     
 
 def get_tweets_for_keywords(batchsize=20, max_keywords=40):

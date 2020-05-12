@@ -68,17 +68,13 @@ def train_all(label_types = ['domain', 'rightleft', 'manifestolabel']):
         idx = df[label_type].isnull() == False
         train_single(df.loc[idx,'text'],df.loc[idx,label_type], label_type)
 
-def score_texts(label_types = ['domain', 'rightleft', 'manifestolabel']):
-
-    df = get_bundestag_data()
-    
+def score_texts(df, label_types = ['domain', 'rightleft', 'manifestolabel']):
     for label_type in label_types:
         fn = os.path.join(DATADIR, 'classifier-{}.pickle'.format(label_type))
         clf = pickle.load(open(fn,'rb'))
         df[label_type + "_proba"] = clf.predict_proba(df['text']).max(axis=1)
         df[label_type] = clf.predict(df['text'])
-
-    df.to_csv("bundestagsprotokolle/bundestagsprotokolle_categorized.csv.gz",index=False,compression='gzip')
+    return df
 
 def get_keywords(label='manifestolabel', top_what=100):
     df = get_bundestag_data()
