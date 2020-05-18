@@ -10,10 +10,10 @@ import itertools
 
 SAVEDIR = 'twitterdata'
 
-START_BEFORE='2020-01-15'
-STOP_BEFORE='2020-01-31'
-START_AFTER='2020-04-15'
-STOP_AFTER='2020-04-30'
+START_BEFORE='2020-01-01'
+STOP_BEFORE='2020-03-17'
+START_AFTER='2020-03-18'
+STOP_AFTER='2020-05-15'
 
 def chunked_iterable(iterable, size):
     it = iter(iterable)
@@ -26,7 +26,7 @@ def chunked_iterable(iterable, size):
 def get_text_from_url(url):
     if url:
         try:
-            soup = BeautifulSoup(requests.get(url).text, 'html.parser')
+            soup = BeautifulSoup(requests.get(url, timeout=0.1).text, 'html.parser')
             return " ".join([p.get_text().replace(u'\xa0', u' ') for p in soup.find_all('p')])
         except:
             return ""
@@ -34,33 +34,37 @@ def get_text_from_url(url):
         return ""
 
 def get_tweets(keywords, start='2020-04-10', stop='2020-04-11',save_dir=''):
-    datestr = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    savestr = os.path.join(save_dir,f'{keywords[0]}-{keywords[-1]}-{datestr}.json')
-    print(f'{datestr}: Fetching tweets in range {start} - {stop} for keywords: {keywords}')
+    try:
+        datestr = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+        savestr = os.path.join(save_dir,f'{keywords[0]}-{keywords[-1]}-{datestr}.json')
+        print(f'{datestr}: Fetching tweets in range {start} - {stop} for keywords: {keywords}')
 
-    tweetCriteria = got.manager.TweetCriteria().setQuerySearch(" OR ".join(keywords))\
-                                         .setSince(start)\
-                                         .setUntil(stop)\
-                                         .setMaxTweets(0)\
-                                         .setLang('de')\
-                                         .setNear('Berlin, Germany')\
-                                         .setWithin('1000km') 
-    tweets = got.manager.TweetManager.getTweets(tweetCriteria)
+        tweetCriteria = got.manager.TweetCriteria().setQuerySearch(" OR ".join(keywords))\
+                                             .setSince(start)\
+                                             .setUntil(stop)\
+                                             .setMaxTweets(0)\
+                                             .setLang('de')\
+                                             .setNear('Berlin, Germany')\
+                                             .setWithin('1000km') 
+        tweets = got.manager.TweetManager.getTweets(tweetCriteria)
 
-    tweet_dicts = []
-    for tweet in tweets:
-        tweet_dict = tweet.__dict__ 
-        tweet_dict['url_text'] = get_text_from_url(tweet.urls)
-        tweet_dicts.append(tweet_dict)
+        tweet_dicts = []
+        for tweet in tweets:
+            tweet_dict = tweet.__dict__ 
+            tweet_dict['url_text'] = get_text_from_url(tweet.urls)
+            tweet_dicts.append(tweet_dict)
 
-    enddatestr =  datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    print(f'{enddatestr}: Found {len(tweets)} tweets')
-    if len(tweets)>0:
-        pd.DataFrame(tweet_dicts).set_index('date').to_json(savestr, orient='records', lines=True)
-    
+        enddatestr =  datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+        print(f'{enddatestr}: Found {len(tweets)} tweets')
+        if len(tweets)>0:
+            pd.DataFrame(tweet_dicts).set_index('date').to_json(savestr, orient='records', lines=True)
+    except:
+        print('Error getting tweets')
+        pass
 
-def get_tweets_for_keywords(batchsize=20, max_keywords=40):
+def get_tweets_for_keywords(batchsize=20, max_keywords=200):
     df = pd.read_csv('keywords.csv') 
+
     for manifestolabel in df.columns:
         path = os.path.join(SAVEDIR, manifestolabel)
         os.makedirs(path, exist_ok=True)
