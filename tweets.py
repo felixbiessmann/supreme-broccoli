@@ -1,4 +1,5 @@
 import re, string, os
+from random import random
 import pandas as pd
 from bs4 import BeautifulSoup
 import requests
@@ -7,13 +8,21 @@ from sklearn.feature_extraction.text import CountVectorizer
 from stop_words import get_stop_words
 from datetime import datetime
 import itertools
+from time import sleep
 
 SAVEDIR = 'twitterdata'
 
+<<<<<<< HEAD
+START_BEFORE='2020-01-06'
+STOP_BEFORE='2020-01-31'
+START_AFTER='2020-04-01'
+STOP_AFTER='2020-04-30'
+=======
 START_BEFORE='2020-01-01'
 STOP_BEFORE='2020-03-17'
 START_AFTER='2020-03-18'
 STOP_AFTER='2020-05-15'
+>>>>>>> c76722ad6af786eba3ccad0932a941f7f4a6a30f
 
 def chunked_iterable(iterable, size):
     it = iter(iterable)
@@ -73,8 +82,10 @@ def get_tweets_for_keywords(batchsize=20, max_keywords=200):
                        start=START_BEFORE,
                        stop=STOP_BEFORE, 
                        save_dir=path)
+            sleep(random() * 5 + 2)
             get_tweets(keywords=kw_chunk, 
                        start=START_AFTER,
                        stop=STOP_AFTER, 
                        save_dir=path)
+            sleep(random() * 5 + 2)
 
