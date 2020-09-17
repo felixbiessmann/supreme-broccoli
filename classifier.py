@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import pickle, os, gzip
+import requests, glob, json
 import urllib.request
 import pandas as pd
 import numpy as np
+from bs4 import BeautifulSoup
 from sklearn.linear_model import SGDClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import GridSearchCV
@@ -14,18 +16,44 @@ from manifesto_data import (get_manifesto_texts,
                             LABEL2RIGHTLEFT,
                             MANIFESTOCODE2LABEL)
 
+def load_bundestag_protocols():
+    root_url = "https://www.bundestag.de"
+    url = "https://www.bundestag.de/ajax/filterlist/de/services/opendata/543410-543410/h_49f0d94cb26682ff1e9428b6de471a5b?limit=10&noFilterSet=true&offset="
+     
+    for offset in range(0,300,10):
+        protocol_list = requests.get(url + f"{offset}").text
+     
+        # Passing the source code to BeautifulSoup to create a BeautifulSoup object for it.
+        soup = BeautifulSoup(protocol_list, 'lxml')
+
+        # Extracting all the <a> tags into a list.
+        tags = soup.find_all('a')
+        os.makedirs('bundestagsprotokolle', exist_ok=True)
+
+        for link in soup.find_all('a'):
+            if link.get('href').endswith('.xml'):
+                xml_response = requests.get(root_url + link.get('href'))
+                open(os.path.join('bundestagsprotokolle', f'{offset}-' + link.get('href').split('/')[-1]), 'w').write(xml_response.text)
+
+    files = glob.glob('bundestagsprotokolle/*data.xml')
+    reden = []
+    for file in files:
+        protocol = BeautifulSoup(open(file).read())
+        datum = protocol.find('veranstaltungsdaten').find('datum').get_text()
+        for rede in protocol.find_all('rede'):
+            reden.append({
+                'datum': datum,
+                'redner': rede.find('redner').get_text(),
+                'rede': " ".join([x.getText() for x in rede.find_all('p',{'klasse':'J'})]),
+                'beifall': [k.getText() for k in rede.find_all('kommentar') if 'Beifall' in k.getText()]
+            })
+
+    with open('alle_reden.json', 'w') as fp:
+        json.dump(reden, fp)
+
 def get_bundestag_data(DATADIR='bundestagsprotokolle'):
-    if not os.path.exists(DATADIR): 
-        os.mkdir(DATADIR)
 
-    file_name = os.path.join(DATADIR, 'bundestags_parlamentsprotokolle.csv.gzip')
-    if not os.path.exists(file_name):
-        url_data = 'https://www.dropbox.com/s/1nlbfehnrwwa2zj/bundestags_parlamentsprotokolle.csv.gzip?dl=1'
-        urllib.request.urlretrieve(url_data, file_name)
-
-    df = pd.read_csv(gzip.open(file_name), index_col=0).sample(frac=1)
-    df.loc[df.wahlperiode==17,'government'] = df[df.wahlperiode==17].partei.isin(['cducsu','fdp'])
-    df.loc[df.wahlperiode==18,'government'] = df[df.wahlperiode==18].partei.isin(['cducsu','spd'])
+    df = pd.read_json(os.path.join(DATADIR, 'alle_reden.json')).sample(frac=1)
     
     return df
 
@@ -80,9 +108,9 @@ def get_keywords(label='manifestolabel', top_what=100):
     df = get_bundestag_data()
     fn = os.path.join(DATADIR, 'classifier-{}.pickle'.format(label))
     clf = pickle.load(open(fn,'rb'))
-    labels_normalized = StandardScaler().fit_transform(clf.predict_proba(df['text']))
+    labels_normalized = StandardScaler().fit_transform(clf.predict_proba(df['rede']))
     vectorizer = clf.steps[0][1]
-    data_scaled = StandardScaler(with_mean=False).fit_transform(vectorizer.transform(df['text']))
+    data_scaled = StandardScaler(with_mean=False).fit_transform(vectorizer.transform(df['rede']))
     keywords = {}
     for iclass, classname in enumerate(clf.steps[1][1].classes_):
         pattern = labels_normalized[:,iclass].T @ data_scaled
