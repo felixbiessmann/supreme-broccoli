@@ -116,4 +116,4 @@ def get_keywords(label='manifestolabel', top_what=100):
         pattern = labels_normalized[:,iclass].T @ data_scaled
         idx2word = {idx: word for word, idx in vectorizer.vocabulary_.items()}
         keywords[classname] = [idx2word[idx] for idx in pattern.argsort()[-top_what:][::-1]]
-    pd.DataFrame(keywords).to_csv('keywords.csv')
+    pd.DataFrame(keywords).to_csv('keywords.csv', index=False)
