@@ -3,8 +3,8 @@ import urllib.request
 import pandas as pd
 
 BASEURL = "https://manifesto-project.wzb.eu/tools"
-VERSION = "MPDS2018a"
-APIKEY  = "" #AN API KEY STRING FROM https://manifestoproject.wzb.eu/information/documents/api
+VERSION = "MPDS2020a"
+APIKEY  = "9cd9104a725f26bcae04da3eed6bdd40" #AN API KEY STRING FROM https://manifestoproject.wzb.eu/information/documents/api
 COUNTRY = "Germany"
 DATADIR = "manifesto"
 

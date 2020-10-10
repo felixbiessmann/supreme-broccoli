@@ -7,7 +7,8 @@ import numpy as np
 from bs4 import BeautifulSoup
 from sklearn.linear_model import SGDClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.metrics import classification_report, precision_recall_curve
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from manifesto_data import (get_manifesto_texts,
@@ -65,8 +66,7 @@ def get_manifesto_data():
     df['rightleft'] = df['manifestocodes']\
                     .apply(lambda x: LABEL2RIGHTLEFT.get(x, None))
     df['manifestolabel'] = df['manifestocodes']\
-                    .apply(lambda x: MANIFESTOCODE2LABEL.get(x, None))\
-                    .replace(['undefined'], [None])
+                    .apply(lambda x: MANIFESTOCODE2LABEL.get(x, None))
     return df
 
 
@@ -89,6 +89,26 @@ def train_single(data, labels, save_str=""):
     # dump classifier to pickle
     fn = os.path.join(DATADIR, 'classifier-{}.pickle'.format(save_str))
     pickle.dump(gs_clf.best_estimator_,open(fn,'wb'))
+    # 2-fold CV with best hps to evaluate and calculate precision thresholds
+    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=.5)
+    eval_clf = gs_clf.best_estimator_.fit(X_train, y_train)
+    y_hat = eval_clf.predict(X_test)
+    metrics_df = pd.DataFrame(classification_report(y_test, y_hat, output_dict=True))
+    fn_metrics = os.path.join(DATADIR, 'classifier-{}-metrics.csv'.format(save_str))
+    metrics_df.to_csv(fn_metrics)
+
+    y_hat_proba = eval_clf.predict_proba(X_test)
+    prec_rec_curves = {}
+
+    for label in eval_clf.classes_:
+        prec, rec, thresh = precision_recall_curve(y_test==label, y_hat_proba[:,eval_clf.classes_==label])
+        prec_rec_curves[label] = {
+                                    'precisions':prec,
+                                    'recall':rec,
+                                    'thresholds':thresh
+                                }
+    fn_pr_curve = os.path.join(DATADIR, 'classifier-{}-pr_curve.pickle'.format(save_str))
+    pickle.dump(prec_rec_curves, open(fn_pr_curve,'wb'))
 
 def train_all(label_types = ['domain', 'rightleft', 'manifestolabel']):
     df = get_manifesto_data()
@@ -96,12 +116,27 @@ def train_all(label_types = ['domain', 'rightleft', 'manifestolabel']):
         idx = df[label_type].isnull() == False
         train_single(df.loc[idx,'text'],df.loc[idx,label_type], label_type)
 
-def score_texts(df, label_types = ['domain', 'rightleft', 'manifestolabel']):
+def score_texts(df, 
+                label_types = ['domain', 'rightleft', 'manifestolabel'], 
+                min_precision=0.5):
     for label_type in label_types:
         fn = os.path.join(DATADIR, 'classifier-{}.pickle'.format(label_type))
         clf = pickle.load(open(fn,'rb'))
+        # first predict labels and their likelihood
         df[label_type + "_proba"] = clf.predict_proba(df['text']).max(axis=1)
         df[label_type] = clf.predict(df['text'])
+        # now filter out predictions below specified precision threshold
+        fn = os.path.join(DATADIR, 'classifier-{}-pr_curve.pickle'.format(label_type))
+        pr_curves = pickle.load(open(fn,'rb'))
+        for label in clf.classes_:
+            above_precision = pr_curves[label]['thresholds'] > min_precision
+            if sum(above_precision) > 0:
+                prec_thresh = pr_curves[label]['thresholds'][above_precision.nonzero()[0][0]-1]
+                below_precision_idx = (df[label_type]==label) & (df[label_type + "_proba"] < prec_thresh)
+                df.loc[below_precision_idx, label_type] = ''
+            else:
+                df.loc[:, label_type] = ''
+
     return df
 
 def get_keywords(label='manifestolabel', top_what=100):
