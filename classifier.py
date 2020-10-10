@@ -135,7 +135,7 @@ def score_texts(df,
                 below_precision_idx = (df[label_type]==label) & (df[label_type + "_proba"] < prec_thresh)
                 df.loc[below_precision_idx, label_type] = ''
             else:
-                df.loc[:, label_type] = ''
+                df.loc[df[label_type]==label, label_type] = ''
 
     return df
 
