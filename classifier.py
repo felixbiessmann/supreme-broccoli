@@ -69,6 +69,12 @@ def get_manifesto_data():
                     .apply(lambda x: MANIFESTOCODE2LABEL.get(x, None))
     return df
 
+def get_human_data():
+    df_human = pd.read_json('human_labeled_data.json')
+    df_human['text'] = df_human['text_data'].str.replace('https[^\s]*\s', '')
+    df_human['manifestolabel'] = df_human['major_label'].str.replace('\d\d\d ','')
+    return df_human
+
 
 def train_single(data, labels, save_str=""):
     '''
@@ -139,16 +145,25 @@ def score_texts(df,
 
     return df
 
-def get_keywords(label='manifestolabel', top_what=100):
-    df = get_bundestag_data()
+def get_keywords(label='all_tweets', top_what=100):
+    stopwords = [x.strip() for x in open('stopwords.txt').readlines()[7:]]
+
+    df_bundestag = get_bundestag_data()
+    df_manifesto = get_manifesto_data()
+    df_human = get_human_data()
+    text = pd.concat([df_bundestag['rede'],df_manifesto['text'],df_human['text']],axis=0)
     fn = os.path.join(DATADIR, 'classifier-{}.pickle'.format(label))
     clf = pickle.load(open(fn,'rb'))
-    labels_normalized = StandardScaler().fit_transform(clf.predict_proba(df['rede']))
+    labels_normalized = StandardScaler().fit_transform(clf.predict_proba(text))
     vectorizer = clf.steps[0][1]
-    data_scaled = StandardScaler(with_mean=False).fit_transform(vectorizer.transform(df['rede']))
+    data_scaled = StandardScaler(with_mean=False).fit_transform(vectorizer.transform(text))
     keywords = {}
     for iclass, classname in enumerate(clf.steps[1][1].classes_):
-        pattern = labels_normalized[:,iclass].T @ data_scaled
-        idx2word = {idx: word for word, idx in vectorizer.vocabulary_.items()}
-        keywords[classname] = [idx2word[idx] for idx in pattern.argsort()[-top_what:][::-1]]
-    pd.DataFrame(keywords).to_csv('keywords.csv', index=False)
+        if classname not in ['undefined', 'ignored']:
+            pattern = labels_normalized[:,iclass].T @ data_scaled
+            idx2word = {idx: word for word, idx in vectorizer.vocabulary_.items()}
+            words = pd.Series([idx2word[idx] for idx in pattern.argsort()[::-1]])
+            exclude = words.isin(stopwords) | words.str.contains('\d+')
+            keywords[classname] = words[~exclude].dropna()[:top_what].values
+    df_keywords = pd.DataFrame(keywords)
+    df_keywords.to_csv('keywords.csv', index=False)

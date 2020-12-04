@@ -117,3 +117,29 @@ def concat_all_tweets():
 
     df.to_csv('all_tweets.csv')
     df.to_pickle('all_tweets.pickle')
+
+
+def snstweet_scraper():
+    # https://github.com/Mottl/GetOldTweets3/issues/98
+    import snscrape.modules.twitter as sntwitter
+    import csv
+    maxTweets = 3000
+
+    #keyword = 'deprem'
+    #place = '5e02a0f0d91c76d2' #This geo_place string corresponds to İstanbul, Turkey on twitter.
+
+    #keyword = 'covid'
+    #place = '01fbe706f872cb32' This geo_place string corresponds to Washington DC on twitter.
+
+    #Open/create a file to append data to
+    csvFile = open('place_result.csv', 'a', newline='', encoding='utf8')
+
+    #Use csv writer
+    csvWriter = csv.writer(csvFile)
+    csvWriter.writerow(['id','date','tweet',]) 
+
+    for i,tweet in enumerate(sntwitter.TwitterSearchScraper('deprem + place:5e02a0f0d91c76d2 + since:2020-10-31 until:2020-11-03 -filter:links -filter:replies').get_items()):
+            if i > maxTweets :
+                break  
+            csvWriter.writerow([tweet.id, tweet.date, tweet.content])
+    csvFile.close()
