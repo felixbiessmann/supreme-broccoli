@@ -3,14 +3,16 @@ from random import random
 import pandas as pd
 from bs4 import BeautifulSoup
 import requests
-import GetOldTweets3 as got 
 from sklearn.feature_extraction.text import CountVectorizer
 from stop_words import get_stop_words
 from datetime import datetime
 import itertools
+import snscrape.modules.twitter as sntwitter
 from time import sleep
+from multiprocessing import Pool, Process, Manager
 
 SAVEDIR = 'twitterdata'
+SAVEDIR_NEW = 'tweets'
 
 START_BEFORE='2020-01-15'
 STOP_BEFORE='2020-01-31'
@@ -35,32 +37,32 @@ def get_text_from_url(url):
     else:
         return ""
 
-def get_tweets(keywords, start='2020-04-10', stop='2020-04-11',save_dir=''):
-   # try:
-    datestr = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    savestr = os.path.join(save_dir,f'{keywords[0]}-{keywords[-1]}-{datestr}.json')
-    print(f'{datestr}: Fetching tweets in range {start} - {stop} for keywords: {keywords}')
+def get_tweets(keywords, save_dir=SAVEDIR_NEW, maxTweets = 100):
+    df_keywords = pd.read_csv('keywords.csv')
+    
+    dates = pd.date_range('1/1/2020', periods=52, freq='W')
 
-    tweetCriteria = got.manager.TweetCriteria().setQuerySearch(" OR ".join(keywords))\
-                                         .setSince(start)\
-                                         .setUntil(stop)\
-                                         .setMaxTweets(0)\
-                                         .setLang('de')
-    tweets = got.manager.TweetManager.getTweets(tweetCriteria)
+    for week_idx, date in enumerate(dates):
+        for label in df_keywords.columns:
+            keywords = df_keywords[label]
+            ss = label.replace('/','-')
+            savestr = os.path.join(save_dir,f'{ss}-{date}.json')
+            start = f'{dates[week_idx]}'[:10]
+            stop = f'{dates[week_idx+1]}'[:10]
+            print(f'{datestr}: Fetching tweets in range {start} - {stop} for keywords: {keywords}')
 
-    tweet_dicts = []
-    for tweet in tweets:
-        tweet_dict = tweet.__dict__ 
-        tweet_dict['url_text'] = ""#get_text_from_url(tweet.urls)
-        tweet_dicts.append(tweet_dict)
+            tweets = []
+            query = " OR ".join(keywords) + " lang:de" + ' since:' + start + " until:" + stop
+            # Using TwitterSearchScraper to scrape data and append tweets to list
+            for i,tweet in enumerate(sntwitter.TwitterSearchScraper(query).get_items()):
+                if i>maxTweets:
+                    break
+                tweets.append(tweet.__dict__)
 
-    enddatestr =  datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    print(f'{enddatestr}: Found {len(tweets)} tweets')
-    if len(tweets)>0:
-        pd.DataFrame(tweet_dicts).set_index('date').to_json(savestr, orient='records', lines=True)
-    #except:
-    #    print('Error getting tweets')
-    #    pass
+            print(f'Found {len(tweets)} tweets')
+            if len(tweets)>0:
+                pd.DataFrame(tweets).to_json(savestr, orient='records', lines=True)
+
 
 def get_tweets_for_keywords(batchsize=5, max_keywords=200):
     df = pd.read_csv('keywords.csv') 
@@ -80,7 +82,35 @@ def get_tweets_for_keywords(batchsize=5, max_keywords=200):
                        save_dir=path)
             sleep(random() * 5 + 2)
 
-def read_json_tweets():
+def read_new_tweet_json(fn, interaction_filter=True):
+    df = pd.read_json(fn, orient='records', lines=True)
+    print(f'\tRead {len(df)} lines from {fn}')    
+    df = df[['url', 'date', 'content', 'id',  
+            'replyCount', 'retweetCount', 'likeCount', 'quoteCount']]
+    df.rename(columns = {'content':'text',
+                                    'replyCount':'replies',
+                                    'retweetCount':'retweets',
+                                    'likeCount':'likes',
+                                    'quoteCount':'quotes'
+                                   }, inplace = True)
+    df['manifestolabel_keywords'] = fn.split('/')[-1].split('-2020')[0]
+    if interaction_filter:
+        df = df[df[['replies','retweets','likes']].sum(axis=1)>1]
+    df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
+    print(f'Found {len(df)} tweets')
+    return df
+    
+def read_new_json_tweets(interaction_filter=False):
+    dfs = []
+    files = glob.glob(os.path.join(SAVEDIR_NEW, "**", "*.json"), recursive=True)
+    print(f'Found {len(files)} json files in {SAVEDIR}')
+    for file in files:
+        df = read_new_tweet_json(file, interaction_filter)
+        df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None)
+        dfs.append(df)        
+    return pd.concat(dfs).reset_index(drop=True)
+
+def read_json_tweets(interaction_filter=False):
     dfs = []
     files = glob.glob(os.path.join(SAVEDIR, "**", "*.json"), recursive=True)
     print(f'Found {len(files)} json files in {SAVEDIR}')
@@ -90,10 +120,17 @@ def read_json_tweets():
         df = pd.DataFrame([json.loads(line) for line in json_lines])
         df['manifestolabel_keywords'] = file.split('/')[-2]
         df['date'] = pd.to_datetime(df['formatted_date']).dt.tz_localize(None)
+        df['text'] = df['text'].fillna('')
+        df = df[['text','permalink','retweets','favorites','replies','date','manifestolabel_keywords']]\
+            .rename(columns={'permalink':'url','favorites':'likes'})
+        if interaction_filter:
+            df = df[df[['replies','retweets','likes']].sum(axis=1)>1]
+        print(f'Found {len(df)} tweets')
         dfs.append(df)        
     return pd.concat(dfs).reset_index(drop=True)
 
-def read_csv_tweets():
+def read_csv_tweets(interaction_filter=False):
+    
     files = glob.glob(os.path.join(SAVEDIR, "**", "*.csv"), recursive=True)
     print(f'Found {len(files)} json files in {SAVEDIR}')
     dfs = []
@@ -106,40 +143,22 @@ def read_csv_tweets():
         print(f'\tRead {len(df)} lines from {file}')    
         df['manifestolabel_keywords'] = file.split('/')[-2]
         df['date'] = pd.to_datetime(df['formatted_date']).dt.tz_localize(None)
+        df['text'] = df['text'].fillna('')
+        df = df[['text','permalink','retweets','favorites','replies','date','manifestolabel_keywords']]\
+            .rename(columns={'permalink':'url','favorites':'likes'})
+        if interaction_filter:
+            df = df[df[['replies','retweets','likes']].sum(axis=1)>1]
+        print(f'Found {len(df)} tweets')
         dfs.append(df)
     return pd.concat(dfs).reset_index(drop=True)
 
 def concat_all_tweets():
-    df = pd.concat([read_json_tweets(), read_csv_tweets()]).drop_duplicates(subset='id')
+    df = pd.concat([read_json_tweets(), 
+                    read_csv_tweets(), 
+                    read_new_json_tweets()]).drop_duplicates(subset='id')
 
     df['before'] = df['date'] < pd.Timestamp(2020,3,15)
     df['after'] = df['date'] > pd.Timestamp(2020,3,15)
 
     df.to_csv('all_tweets.csv')
     df.to_pickle('all_tweets.pickle')
-
-
-def snstweet_scraper():
-    # https://github.com/Mottl/GetOldTweets3/issues/98
-    import snscrape.modules.twitter as sntwitter
-    import csv
-    maxTweets = 3000
-
-    #keyword = 'deprem'
-    #place = '5e02a0f0d91c76d2' #This geo_place string corresponds to İstanbul, Turkey on twitter.
-
-    #keyword = 'covid'
-    #place = '01fbe706f872cb32' This geo_place string corresponds to Washington DC on twitter.
-
-    #Open/create a file to append data to
-    csvFile = open('place_result.csv', 'a', newline='', encoding='utf8')
-
-    #Use csv writer
-    csvWriter = csv.writer(csvFile)
-    csvWriter.writerow(['id','date','tweet',]) 
-
-    for i,tweet in enumerate(sntwitter.TwitterSearchScraper('deprem + place:5e02a0f0d91c76d2 + since:2020-10-31 until:2020-11-03 -filter:links -filter:replies').get_items()):
-            if i > maxTweets :
-                break  
-            csvWriter.writerow([tweet.id, tweet.date, tweet.content])
-    csvFile.close()

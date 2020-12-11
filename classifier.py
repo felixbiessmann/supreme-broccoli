@@ -86,9 +86,8 @@ def train_single(data, labels, save_str=""):
 
     '''
     text_clf = Pipeline([('vect', TfidfVectorizer()),
-                        ('clf',SGDClassifier(loss="log"))])
-    parameters = {'vect__ngram_range': [(1,1)],
-           'clf__alpha': (10.**np.arange(-6,-3)).tolist()}
+                        ('clf',SGDClassifier(loss="log",penalty='l1',max_iter=2000,early_stopping=True))])
+    parameters = {'vect__ngram_range': [(1,1), (1,2), (1,3)]}
     # perform gridsearch to get the best regularizer
     gs_clf = GridSearchCV(text_clf, parameters, cv=2, n_jobs=-1,verbose=6)
     gs_clf.fit(data,labels)
@@ -96,7 +95,7 @@ def train_single(data, labels, save_str=""):
     fn = os.path.join(DATADIR, 'classifier-{}.pickle'.format(save_str))
     pickle.dump(gs_clf.best_estimator_,open(fn,'wb'))
     # 2-fold CV with best hps to evaluate and calculate precision thresholds
-    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=.5)
+    X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=.2)
     eval_clf = gs_clf.best_estimator_.fit(X_train, y_train)
     y_hat = eval_clf.predict(X_test)
     metrics_df = pd.DataFrame(classification_report(y_test, y_hat, output_dict=True))
